@@ -1,7 +1,8 @@
 import os
 import time
 from pydantic import BaseModel, Field
-import google.generativeai as genai
+import google.genai as genai  # <-- Updated modern import
+from google.genai import types  # <-- Needed for config structures
 from sandbox import ExecutionSandbox
 
 class CoderResponseSchema(BaseModel):
@@ -9,23 +10,15 @@ class CoderResponseSchema(BaseModel):
     filename: str = Field(description="The name of the file to create (e.g., 'scraper.py').")
     code: str = Field(description="The complete, production-ready Python source code text.")
     run_command: str = Field(description="The exact terminal execution command (e.g., 'python scraper.py').")
+    expected_output_marker: str = Field(description="A distinct text phrase or structural marker that MUST appear in the stdout log if the code ran successfully (e.g., 'Current Bitcoin Price:')")
 
 def run_autonomous_developer(user_prompt: str, max_retries: int = 4) -> dict:
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        raise ValueError("❌ Missing Environment Variable: Please set GEMINI_API_KEY")
+    # 1. Initialize the modern GenAI Client
+    # The new SDK automatically looks for the GEMINI_API_KEY env variable natively
+    if not os.environ.get("GEMINI_API_KEY"):
+        raise ValueError("❌ Missing Environment Variable: Please set GEMINI_API_KEY in your .env file")
         
-    genai.configure(api_key=api_key)
-    
-    system_instruction = (
-        "You are an expert autonomous software engineer executing operations in an isolated Linux container. "
-        "Your goal is to build high-quality, completely functional scripts that fulfill the user's request."
-    )
-    
-    model = genai.GenerativeModel(
-        model_name='gemini-2.5-flash',
-        system_instruction=system_instruction
-    )
+    client = genai.Client()  # <-- Created stateless modern client instantiation
     
     workspace_id = f"dev_task_{int(time.time())}"
     print(f"📦 Workspace initialized: {workspace_id}")
@@ -38,26 +31,28 @@ def run_autonomous_developer(user_prompt: str, max_retries: int = 4) -> dict:
         while attempt < max_retries:
             attempt += 1
             print(f"\n==================================================")
-            print(f"🤖 [LOOP ATTEMPT {attempt}/{max_retries}] Calling Agent Engine...")
+            print(f"🤖 [LOOP ATTEMPT {attempt}/{max_retries}] Calling Modern Agent Engine...")
             print(f"==================================================")
             
-            response = model.generate_content(
-                history_context,
-                generation_config=genai.GenerationConfig(
+            # The modern client uses client.models.generate_content
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=history_context,
+                config=types.GenerateContentConfig(  # <-- Updated modern config contract
                     response_mime_type="application/json",
                     response_schema=CoderResponseSchema,
-                    temperature=0.3
+                    temperature=0.3,
+                    system_instruction="You are an expert autonomous software engineer executing operations in an isolated Linux container."
                 )
             )
             
-            agent_data = CoderResponseSchema.model_validate_json(response.text)
+            # The new SDK automatically parses the JSON directly into your Pydantic object
+            # accessible via the response.parsed attribute!
+            agent_data = response.parsed
             
-            # ─────────────────────────────────────────────────────────
-            # INTERMEDIARY STEP 1: INSPECTING GENERATED CODE
-            # ─────────────────────────────────────────────────────────
             print(f"\n[INTERMEDIARY LOG] Agent Rationale: {agent_data.explanation}")
             print(f"[INTERMEDIARY LOG] Target Filename: {agent_data.filename}")
-            print(f"\n--- 📄 RAW GENERATED CODE CODE (Attempt {attempt}) ---")
+            print(f"\n--- 📄 RAW GENERATED CODE (Attempt {attempt}) ---")
             print(agent_data.code.strip())
             print(f"──────────────────────────────────────────────────\n")
             
@@ -66,9 +61,6 @@ def run_autonomous_developer(user_prompt: str, max_retries: int = 4) -> dict:
             print(f"[INTERMEDIARY LOG] Spawning container with command: `{agent_data.run_command}`")
             execution = sandbox.execute_command(agent_data.run_command)
             
-            # ─────────────────────────────────────────────────────────
-            # INTERMEDIARY STEP 2: INSPECTING CONTAINER TELEMETRY
-            # ─────────────────────────────────────────────────────────
             print(f"\n--- 🖥️ DOCKER TERMINAL OUTPUT (Attempt {attempt}) ---")
             print(f"Exit Code Received: {execution['exit_code']}")
             print("Console Output:")
@@ -93,13 +85,6 @@ def run_autonomous_developer(user_prompt: str, max_retries: int = 4) -> dict:
                 f"Here are the absolute terminal logs / error traces:\n{execution['output']}\n"
                 f"Analyze the mistake, rewrite the complete script, and provide corrected variables."
             )
-            
-            # ─────────────────────────────────────────────────────────
-            # INTERMEDIARY STEP 3: CONTEXT STREAM RE-INJECTION
-            # ─────────────────────────────────────────────────────────
-            print(f"\n--- 🔄 RE-INJECTING FEEDBACK INTO LLM CONTEXT ---")
-            print(f"Appending error logs to history state for next iteration calculation.")
-            print(f"──────────────────────────────────────────────────\n")
             
             history_context += feedback_payload
             

@@ -1,12 +1,12 @@
 import os
 from agent_engine import run_autonomous_developer # If running in the same directory, use: from agent_engine import run_autonomous_developer
+from dotenv import load_dotenv
 
 def main():
-    # SET YOUR API KEY FOR THE RUNTIME SESSION
-    # Replace this string with your real Gemini API key from AI Studio
-    os.environ["GEMINI_API_KEY"] = "AIzaSyCCU5x12EdYlsoZ0OH2Qph3MVXn35jZFhs"
     
-    # Challenge prompt: An intentionally tricky task where a model might easily make an initial typo
+    load_dotenv()
+    api_key = os.environ.get("GEMINI_API_KEY")
+
     prompt = (
     "Write a Python script that fetches the current price of Bitcoin from the Coingecko API "
     "(https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd) "

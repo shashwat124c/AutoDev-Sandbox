@@ -45,7 +45,7 @@ class ExecutionSandbox:
                 detach=True, # Run the container in the background asynchronously so it doesn’t lock up your main Python backend script while waiting
                 mem_limit="256m",     # Limits RAM to prevent memory leak crashes
                 nano_cpus=1000000000, # Max 1 CPU core to prevent CPU exhaustion
-                network_disabled=True, # No internet access to prevent data leakage
+                network_disabled=False, 
                 user="1000:1000"      # Run as standard user, not root (admin)
             )
 
