@@ -1,34 +1,40 @@
-import os
-from agent_engine import run_autonomous_developer # If running in the same directory, use: from agent_engine import run_autonomous_developer
+import time
 from dotenv import load_dotenv
+from tasks import async_developer_task
+from celery.result import AsyncResult
+
+load_dotenv()
 
 def main():
-    
-    load_dotenv()
-    api_key = os.environ.get("GEMINI_API_KEY")
-
     prompt = (
-    "Write a Python script that fetches the current price of Bitcoin from the Coingecko API "
-    "(https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd) "
-    "using the requests library. Print the price cleanly to the console. "
-    "Note: The container environment has no third-party libraries pre-installed, "
-    "but you have full freedom to install what you need via your execution command."
-)
+        "Write a Python script that fetches the current price of Bitcoin from the Coingecko API "
+        "(https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd) "
+        "using the requests library. Print the price cleanly to the console."
+    )
     
-    print("🔥 Starting AegisCompute Self-Correction Test Engine 🔥")
-    result = run_autonomous_developer(prompt)
+    print("🔥 Sending task to the asynchronous Redis broker queue...")
     
-    print("\n================ FINAL REPORT ================")
-    print(f"Status: {result['status'].upper()}")
-    print(f"Total Self-Correction Loops: {result['attempts_required']}")
+    # .delay() pushes the job into Redis and returns a non-blocking tracking token immediately
+    task = async_developer_task.delay(prompt)
     
-    if result['status'] == 'success':
-        print(f"Verified Filename: {result['filename']}")
-        print("\n--- Verified Script Execution Output ---")
-        print(result['output'])
-    else:
-        print(f"Failure Reason: {result['error']}")
-    print("==============================================")
+    print(f"🎯 Task successfully queued! Generated Task ID: {task.id}")
+    print("⏳ Polling task execution state from the background worker...")
+    
+    # Poll the status of the task until it completes
+    while not task.ready():
+        print(f"Current Worker State: {task.state}...")
+        time.sleep(3)
+        
+    # Grab the final evaluation payload out of the Redis backend storage cell
+    final_result = task.result
+    
+    print("\n================ ASYNC EXECUTION COMPLETE ================")
+    print(f"Final Status: {final_result['status'].upper()}")
+    print(f"Attempts Needed: {final_result['attempts_required']}")
+    print(f"Filename Created: {final_result['filename']}")
+    print("\n--- Verified Script Output Captured from Worker ---")
+    print(final_result['output'].strip())
+    print("==========================================================")
 
 if __name__ == "__main__":
     main()
