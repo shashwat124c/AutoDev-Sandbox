@@ -1,0 +1,10 @@
+Terminal 1 (Redis): Must have your background broker running (docker start aegis-redis if it stopped).
+
+Terminal 2 (Celery Worker): Run run_worker.bat to keep the background process listening.
+
+Terminal 3 (Flask Server): Open your active myenv shell and run: python app.python
+
+To test: Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/dev-task" -Method Post -ContentType "application/json" -Body 
+        '{"prompt": "Write a python script that prints the squares of numbers up to 5."}'
+
+To check status over http: Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/dev-task/status/YOUR_GENERATED_TASK_ID_HERE" -Method Get
